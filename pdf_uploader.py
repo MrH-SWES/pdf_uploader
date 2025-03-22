@@ -87,8 +87,8 @@ if api_key_option == "Enter my own key":
     if not api_key:
         st.warning("Please enter your OpenAI API Key to continue")
 else:
-    api_key = "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"
-
+    api_key = st.secrets["OPENAI_API_KEY"]
+    
 # PDF uploader
 st.markdown('<div class="upload-header">', unsafe_allow_html=True)
 st.subheader("Upload PDFs")
@@ -98,8 +98,8 @@ st.markdown('</div>', unsafe_allow_html=True)
 uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
 
 # Pinecone settings
-PINECONE_API_KEY = "pcsk_45M1HN_8F2USc2fdQLNnYLJsyQsBNYtDj5to5CBgqEgoMDKzer6eifNa5WobxEvyr1QQgY"
-INDEX_NAME = "science-of-reading"
+PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
+INDEX_NAME = st.secrets["PINECONE_INDEX_NAME"]
 
 # Process PDFs button
 if uploaded_files and st.button("Process PDFs"):
