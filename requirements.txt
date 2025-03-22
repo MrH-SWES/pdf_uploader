@@ -1,0 +1,6 @@
+streamlit
+langchain
+langchain-community
+langchain-openai
+langchain-pinecone
+pinecone-client
