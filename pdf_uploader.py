@@ -11,45 +11,90 @@ from pinecone import Pinecone
 # Page configuration
 st.set_page_config(
     page_title="PDF Uploader for Ms. GPT",
-    page_icon="📚",
+    page_icon=None,
     layout="centered"
 )
 
-# Custom CSS
+# Custom CSS to match Ms. GPT style
 st.markdown("""
 <style>
-    .main {
-        background-color: #f4f7f9;
-    }
-    .stApp h1 {
-        color: #2d6a8f;
-    }
-    .stButton>button {
-        background-color: #2d6a8f;
-        color: white;
-        border: none;
-        padding: 0.6rem 1.2rem;
-        border-radius: 6px;
-        font-weight: 500;
-    }
-    .stProgress .st-bo {
-        background-color: #2d6a8f;
-    }
-    .upload-header {
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        padding: 1rem;
-        background-color: #e6f0f7;
-        border-radius: 10px;
-        border-left: 4px solid #2d6a8f;
-    }
-    .result-summary {
-        margin-top: 2rem;
-        padding: 1rem;
-        background-color: #e7f5e8;
-        border-radius: 10px;
-        border-left: 4px solid #2d9954;
-    }
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
+
+body, .main, .stApp {
+    background-color: #fdf8f0 !important;
+    font-family: 'Lexend', sans-serif;
+    color: #2D2926;
+}
+
+.stApp h1 {
+    font-family: 'Lexend', sans-serif !important;
+    font-weight: 600;
+    font-size: 28px;
+    color: #022E66;
+    margin-top: 0.5rem;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.015em;
+}
+
+.stButton > button {
+    background-color: #8B6E4E !important;
+    color: #FFFFFF !important;
+    font-family: 'Lexend', sans-serif;
+    padding: 8px 16px !important;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    height: auto !important;
+    min-height: 0px !important;
+    white-space: nowrap;
+    transition: background-color 0.3s ease;
+}
+
+.stButton > button:hover {
+    background-color: #5D4037 !important;
+    color: #FFFFFF !important;
+}
+
+.stProgress .st-bo {
+    background-color: #8B6E4E;
+}
+
+.upload-header {
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background-color: #F5E8D6;
+    border-radius: 10px;
+    border-left: 4px solid #8B6E4E;
+}
+
+.result-summary {
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: #e7f5e8;
+    border-radius: 10px;
+    border-left: 4px solid #8B6E4E;
+}
+
+/* File uploader styling */
+[data-testid="stFileUploader"] {
+    width: 100%;
+}
+
+[data-testid="stFileUploader"] section {
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px dashed #8B6E4E;
+    background-color: #F5E8D6;
+}
+
+/* Radio buttons */
+.stRadio [data-testid="stMarkdownContainer"] p {
+    font-family: 'Lexend', sans-serif;
+    font-size: 15px;
+    color: #2D2926;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -100,6 +145,7 @@ uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multipl
 # Pinecone settings
 PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
 INDEX_NAME = st.secrets["PINECONE_INDEX_NAME"]
+PINECONE_HOST = st.secrets["PINECONE_HOST"]
 
 # Process PDFs button
 if uploaded_files and st.button("Process PDFs"):
@@ -173,12 +219,26 @@ if uploaded_files and st.button("Process PDFs"):
                 # Add to Pinecone
                 status_text.text(f"Adding {chunks} chunks from {uploaded_file.name} to Pinecone...")
                 
+                # Clean filename to use as source
+                clean_filename = uploaded_file.name
+                
                 # Process in smaller batches
                 batch_size = 50
                 for j in range(0, chunks, batch_size):
                     end_idx = min(j + batch_size, chunks)
                     batch = chunked_documents[j:end_idx]
+                    
+                    # Set consistent source metadata to match main app's expectations
+                    for doc in batch:
+                        # Use the exact format that the main app expects to find
+                        doc.metadata["source"] = f"cleaned_pdfs\\{clean_filename}"
+                        # Add additional metadata to help with filtering
+                        doc.metadata["type"] = "pdf_resource"
+                        doc.metadata["upload_timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # Add documents to Pinecone
                     vector_store.add_documents(batch)
+                    
                     # Update progress within file
                     file_progress = 0.5 + ((i + (end_idx / chunks)) / total_files) * 0.5
                     progress_bar.progress(min(file_progress, 1.0))
@@ -203,6 +263,45 @@ if uploaded_files and st.button("Process PDFs"):
                 # Clean up the temporary file
                 os.unlink(pdf_path)
         
+        # Add a direct verification check to confirm documents were added
+        status_text.text("Verifying documents were successfully added...")
+        time.sleep(2)  # Brief pause to ensure Pinecone has indexed the documents
+        
+        # Try to verify at least one document is retrievable
+        try:
+            if total_chunks > 0:
+                # Create a sample query using content from the PDFs
+                sample_texts = [doc.page_content[:100] for doc in chunked_documents[:5]]
+                sample_text = sample_texts[0] if sample_texts else "education document"
+                
+                # Attempt a direct retrieval using source filter
+                document_exists = False
+                
+                # Use a direct metadata fetch if available
+                try:
+                    stats = index.describe_index_stats()
+                    if stats.get('total_vector_count', 0) > 0:
+                        document_exists = True
+                except Exception as e:
+                    st.warning(f"Could not verify documents in Pinecone stats: {str(e)}")
+                    
+                if not document_exists:
+                    # Fallback to querying for the documents
+                    results = vector_store.similarity_search(
+                        sample_text,
+                        k=5,
+                        filter={"type": "pdf_resource"}
+                    )
+                    
+                    if results:
+                        document_exists = True
+                        st.success("Successfully verified documents in Pinecone!")
+                    else:
+                        st.warning("Documents were uploaded but could not be immediately verified. They may take a few minutes to be fully indexed.")
+            
+        except Exception as verification_error:
+            st.warning(f"Could not verify document upload: {str(verification_error)}")
+        
         # Completed
         progress_bar.progress(1.0)
         status_text.text("Processing complete!")
@@ -221,8 +320,10 @@ if uploaded_files and st.button("Process PDFs"):
             with st.expander(f"{result['name']} - {result['status']}"):
                 st.markdown(f"**Pages:** {result['pages']}")
                 st.markdown(f"**Chunks:** {result['chunks']}")
+                st.markdown(f"**Source path in Pinecone:** cleaned_pdfs\\{result['name']}")
         
         st.success("All files have been processed and added to Catherine's knowledge base!")
+        st.info("Please go back to Ms. GPT and click the 'Refresh' button in the Resource Library to see your newly added PDFs.")
         
     except Exception as e:
         st.error(f"Error: {str(e)}")
