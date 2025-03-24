@@ -62,10 +62,9 @@ st.markdown("Upload PDFs to expand Catherine's knowledge base")
 with st.sidebar:
     st.header("Instructions")
     st.markdown("""
-    1. Choose your OpenAI API key option
-    2. Upload one or more PDF files
-    3. Click the 'Process PDFs' button
-    4. Wait for processing to complete
+    1. Upload one or more PDF files
+    2. Click the 'Process PDFs' button
+    3. Wait for processing to complete
     
     The PDFs will be processed and added to Catherine's knowledge base. She'll be able to access this information immediately.
     """)
@@ -79,19 +78,6 @@ with st.sidebar:
     **NEW**: Page numbers are now preserved in the metadata, allowing queries for specific pages.
     """)
 
-# API Key input
-api_key_option = st.radio(
-    "OpenAI API Key",
-    ["Use default key", "Enter my own key"]
-)
-
-if api_key_option == "Enter my own key":
-    api_key = st.text_input("Enter your OpenAI API Key", type="password")
-    if not api_key:
-        st.warning("Please enter your OpenAI API Key to continue")
-else:
-    api_key = "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"
-
 # PDF uploader
 st.markdown('<div class="upload-header">', unsafe_allow_html=True)
 st.subheader("Upload PDFs")
@@ -100,9 +86,19 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
 
-# Pinecone settings
-PINECONE_API_KEY = "pcsk_45M1HN_8F2USc2fdQLNnYLJsyQsBNYtDj5to5CBgqEgoMDKzer6eifNa5WobxEvyr1QQgY"
-INDEX_NAME = "science-of-reading"
+# API Keys from secrets
+try:
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+    PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
+    PINECONE_INDEX_NAME = st.secrets["PINECONE_INDEX_NAME"]
+    PINECONE_HOST = st.secrets.get("PINECONE_HOST", "")  # Optional, might not be needed depending on your Pinecone setup
+except Exception as e:
+    st.error(f"Error accessing secrets: {str(e)}")
+    st.warning("Please make sure your API keys are set in Streamlit secrets.")
+    OPENAI_API_KEY = ""
+    PINECONE_API_KEY = ""
+    PINECONE_INDEX_NAME = ""
+    PINECONE_HOST = ""
 
 # Add option to clear index
 with st.expander("⚠️ Advanced Settings", expanded=False):
@@ -113,19 +109,28 @@ with st.expander("⚠️ Advanced Settings", expanded=False):
 
 # Process PDFs button
 if uploaded_files and st.button("Process PDFs"):
+    # Verify API keys are available
+    if not OPENAI_API_KEY or not PINECONE_API_KEY or not PINECONE_INDEX_NAME:
+        st.error("Missing API keys. Please check your Streamlit secrets configuration.")
+        st.stop()
+    
     # Set up progress tracking
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     # Initialize embeddings
-    os.environ["OPENAI_API_KEY"] = api_key
+    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
     embeddings = OpenAIEmbeddings()
     
     # Connect to Pinecone
     status_text.text("Connecting to Pinecone...")
     try:
         pc = Pinecone(api_key=PINECONE_API_KEY)
-        index = pc.Index(INDEX_NAME)
+        index_params = {"name": PINECONE_INDEX_NAME}
+        if PINECONE_HOST:
+            index_params["host"] = PINECONE_HOST
+        
+        index = pc.Index(**index_params)
         
         # Clear index if requested
         if clear_index:
