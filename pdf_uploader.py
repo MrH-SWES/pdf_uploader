@@ -190,31 +190,34 @@ if uploaded_files and st.button("Process PDFs"):
                 # Split into chunks
                 chunked_documents = text_splitter.split_documents(documents)
                 
-               # Ensure proper metadata is preserved
-               for idx, doc in enumerate(chunked_documents):
-                   # Set document type
-                   doc.metadata["type"] = "pdf_resource"
+# Split into chunks
+                chunked_documents = text_splitter.split_documents(documents)
+                
+                # Ensure proper metadata is preserved
+                for idx, doc in enumerate(chunked_documents):
+                    # Set document type
+                    doc.metadata["type"] = "pdf_resource"
     
-                   # Page numbers in PyPDFLoader are 0-indexed, let's make them 1-indexed
-                   if "page" in doc.metadata:
-                       # Convert to int to ensure it's a number
-                       page_num = int(doc.metadata["page"])
-                       # Store as 1-indexed for more natural queries
-                       doc.metadata["page"] = page_num + 1
-                   else:
-                       # Default to page 1 if missing
-                       doc.metadata["page"] = 1
+                    # Page numbers in PyPDFLoader are 0-indexed, let's make them 1-indexed
+                    if "page" in doc.metadata:
+                        # Convert to int to ensure it's a number
+                        page_num = int(doc.metadata["page"])
+                        # Store as 1-indexed for more natural queries
+                        doc.metadata["page"] = page_num + 1
+                    else:
+                        # Default to page 1 if missing
+                        doc.metadata["page"] = 1
     
-                   # IMPORTANT: Set the original filename as the source
-                   # This overrides any temporary filename that might have been set
-                   doc.metadata["source"] = uploaded_file.name
+                    # IMPORTANT: Set the original filename as the source
+                    # This overrides any temporary filename that might have been set
+                    doc.metadata["source"] = uploaded_file.name
     
-                   # Add debug info to the status message
-                   status_text.text(f"Processing chunk {idx+1}/{len(chunked_documents)} from {uploaded_file.name}")
+                    # Add debug info to the status message
+                    status_text.text(f"Processing chunk {idx+1}/{len(chunked_documents)} from {uploaded_file.name}")
                 
                 chunks = len(chunked_documents)
                 total_chunks += chunks
-                
+               
                 # Add to Pinecone
                 status_text.text(f"Adding {chunks} chunks from {uploaded_file.name} to Pinecone...")
                 
