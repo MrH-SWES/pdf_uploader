@@ -1,8 +1,12 @@
 streamlit
-langchain>=0.0.250
-langchain-community>=0.0.18
-langchain-openai>=0.0.7
-pinecone
-langchain-pinecone>=0.1.0
-pypdf
-python-dotenv
+langchain==0.3.21  # Or a recent version you know works
+langchain-community>=0.0.18 # Consider pinning too, e.g., ==0.0.38
+langchain-openai==0.3.10 # Or a recent version you know works
+pinecone>=5.4.0,<6.0.0  # CRITICAL: Force install of version 5.x
+langchain-pinecone==0.2.3 # Version known to work with pinecone 5.x
+pymupdf==1.25.4 # Pinning PyMuPDF
+tqdm # Consider pinning
+python-dotenv # Consider pinning
+openai<2.0.0 # Ensure compatibility if needed
+tiktoken # Ensure compatibility if needed
+# pypdf - If PyPDFLoader needs it explicitly, otherwise pymupdf might be enough. Check imports.
