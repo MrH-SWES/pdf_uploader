@@ -2,7 +2,7 @@ streamlit
 langchain>=0.0.250
 langchain-community>=0.0.18
 langchain-openai>=0.0.7
-pinecone-client>=2.2.1
+pinecone
 langchain-pinecone>=0.1.0
 pypdf
 python-dotenv
