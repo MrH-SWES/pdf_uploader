@@ -9,4 +9,4 @@ tqdm # Consider pinning
 python-dotenv # Consider pinning
 openai<2.0.0 # Ensure compatibility if needed
 tiktoken # Ensure compatibility if needed
-# pypdf - If PyPDFLoader needs it explicitly, otherwise pymupdf might be enough. Check imports.
+pypdf #- If PyPDFLoader needs it explicitly, otherwise pymupdf might be enough. Check imports.
