@@ -3,11 +3,11 @@ import os
 import time
 import tempfile
 import re
-from langchain_community.document_loaders import PyPDFLoader  # Updated import for PyPDFLoader
+from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
-from pinecone import Pinecone  # Ensure you've installed the updated 'pinecone' package
+from pinecone import Pinecone
 
 # Page configuration
 st.set_page_config(
@@ -62,9 +62,10 @@ st.markdown("Upload PDFs to expand Catherine's knowledge base")
 with st.sidebar:
     st.header("Instructions")
     st.markdown("""
-    1. Upload one or more PDF files
-    2. Click the 'Process PDFs' button
-    3. Wait for processing to complete
+    1. Choose your OpenAI API key option
+    2. Upload one or more PDF files
+    3. Click the 'Process PDFs' button
+    4. Wait for processing to complete
     
     The PDFs will be processed and added to Catherine's knowledge base. She'll be able to access this information immediately.
     """)
@@ -78,6 +79,19 @@ with st.sidebar:
     **NEW**: Page numbers are now preserved in the metadata, allowing queries for specific pages.
     """)
 
+# API Key input
+api_key_option = st.radio(
+    "OpenAI API Key",
+    ["Use default key", "Enter my own key"]
+)
+
+if api_key_option == "Enter my own key":
+    api_key = st.text_input("Enter your OpenAI API Key", type="password")
+    if not api_key:
+        st.warning("Please enter your OpenAI API Key to continue")
+else:
+    api_key = "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"
+
 # PDF uploader
 st.markdown('<div class="upload-header">', unsafe_allow_html=True)
 st.subheader("Upload PDFs")
@@ -86,19 +100,9 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 uploaded_files = st.file_uploader("Choose PDF files", type="pdf", accept_multiple_files=True)
 
-# API Keys from secrets
-try:
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-    PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
-    PINECONE_INDEX_NAME = st.secrets["PINECONE_INDEX_NAME"]
-    PINECONE_HOST = st.secrets.get("PINECONE_HOST", "")  # Optional, if needed
-except Exception as e:
-    st.error(f"Error accessing secrets: {str(e)}")
-    st.warning("Please make sure your API keys are set in Streamlit secrets.")
-    OPENAI_API_KEY = ""
-    PINECONE_API_KEY = ""
-    PINECONE_INDEX_NAME = ""
-    PINECONE_HOST = ""
+# Pinecone settings
+PINECONE_API_KEY = "pcsk_45M1HN_8F2USc2fdQLNnYLJsyQsBNYtDj5to5CBgqEgoMDKzer6eifNa5WobxEvyr1QQgY"
+INDEX_NAME = "science-of-reading"
 
 # Add option to clear index
 with st.expander("⚠️ Advanced Settings", expanded=False):
@@ -109,28 +113,19 @@ with st.expander("⚠️ Advanced Settings", expanded=False):
 
 # Process PDFs button
 if uploaded_files and st.button("Process PDFs"):
-    # Verify API keys are available
-    if not OPENAI_API_KEY or not PINECONE_API_KEY or not PINECONE_INDEX_NAME:
-        st.error("Missing API keys. Please check your Streamlit secrets configuration.")
-        st.stop()
-    
     # Set up progress tracking
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     # Initialize embeddings
-    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+    os.environ["OPENAI_API_KEY"] = api_key
     embeddings = OpenAIEmbeddings()
     
     # Connect to Pinecone
     status_text.text("Connecting to Pinecone...")
     try:
         pc = Pinecone(api_key=PINECONE_API_KEY)
-        index_params = {"name": PINECONE_INDEX_NAME}
-        if PINECONE_HOST:
-            index_params["host"] = PINECONE_HOST
-        
-        index = pc.Index(**index_params)
+        index = pc.Index(INDEX_NAME)
         
         # Clear index if requested
         if clear_index:
@@ -171,7 +166,7 @@ if uploaded_files and st.button("Process PDFs"):
                 pdf_path = tmp_file.name
             
             try:
-                # Load PDF (PyPDFLoader includes page numbers in metadata)
+                # Load PDF - PyPDFLoader already includes page numbers in metadata
                 loader = PyPDFLoader(pdf_path)
                 documents = loader.load()
                 
@@ -192,25 +187,30 @@ if uploaded_files and st.button("Process PDFs"):
                 
                 # Ensure proper metadata is preserved
                 for idx, doc in enumerate(chunked_documents):
-                    # Set document type
+                    # PyPDFLoader sets 'source' and 'page' metadata
+                    # We want to ensure 'type' is set to 'pdf_resource'
+                    # We also want to normalize the source name
                     doc.metadata["type"] = "pdf_resource"
-    
-                    # Convert page numbers from 0-indexed to 1-indexed
+                    
+                    # Page numbers in PyPDFLoader are 0-indexed, let's make them 1-indexed
                     if "page" in doc.metadata:
+                        # Convert to int to ensure it's a number
                         page_num = int(doc.metadata["page"])
+                        # Store as 1-indexed for more natural queries
                         doc.metadata["page"] = page_num + 1
                     else:
+                        # Default to page 1 if missing
                         doc.metadata["page"] = 1
-    
-                    # Set the original filename as the source for clear identification
-                    doc.metadata["source"] = uploaded_file.name
                     
-                    # Update status for each chunk
-                    status_text.text(f"Processing chunk {idx+1}/{len(chunked_documents)} from {uploaded_file.name}")
+                    # Clean up source name
+                    if "source" in doc.metadata:
+                        # Extract just the filename without the path
+                        filename = os.path.basename(doc.metadata["source"])
+                        doc.metadata["source"] = filename
                 
                 chunks = len(chunked_documents)
                 total_chunks += chunks
-               
+                
                 # Add to Pinecone
                 status_text.text(f"Adding {chunks} chunks from {uploaded_file.name} to Pinecone...")
                 
