@@ -181,6 +181,7 @@ if st.button("Process PDFs", disabled=process_button_disabled):
                 index=index,
                 embedding=embeddings,
                 text_key="text" # Ensure this matches how data was stored if not clearing
+                namespace=""
             )
 
             # Initialize text splitter
