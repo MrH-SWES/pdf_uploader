@@ -180,7 +180,7 @@ if st.button("Process PDFs", disabled=process_button_disabled):
             vector_store = PineconeVectorStore(
                 index=index,
                 embedding=embeddings,
-                text_key="text" # Ensure this matches how data was stored if not clearing
+                text_key="text", # Ensure this matches how data was stored if not clearing
                 namespace=""
             )
 
